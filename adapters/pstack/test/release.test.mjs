@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { releaseTree } from '../release.mjs';
 const input = { repository: 'RengarLee/plugins', sourceCommit: 'a'.repeat(40), releaseId: '12.1' };
-test('release branch exposes both packages through a stable marketplace', () => {
+test('release branch exposes only Codex through a stable marketplace', () => {
   const files = releaseTree(input);
-  for (const path of ['.agents/plugins/marketplace.json', '.claude-plugin/marketplace.json']) {
+  for (const path of ['.agents/plugins/marketplace.json']) {
     assert.equal(JSON.parse(files.get(path)).name, 'pstack-shared');
   }
-  for (const platform of ['codex', 'claude-code']) {
+  for (const platform of ['codex']) {
     const build = JSON.parse(files.get(`${platform}/BUILD.json`));
     const manifest = JSON.parse(files.get(`${platform}/.${platform === 'codex' ? 'codex' : 'claude'}-plugin/plugin.json`));
     assert.equal(build.sourceCommit, input.sourceCommit);
@@ -16,6 +16,8 @@ test('release branch exposes both packages through a stable marketplace', () => 
     assert.ok(files.has(`${platform}/skills/reflect/SKILL.md`));
   }
   assert.equal(JSON.parse(files.get('PSTACK-RELEASE.json')).managedBy, 'pstack-adapter-release-v1');
+  assert.equal(files.has('.claude-plugin/marketplace.json'), false);
+  assert.equal([...files.keys()].some(path => path.startsWith('claude-code/')), false);
   const next = releaseTree({ ...input, releaseId: '13.1' });
   assert.notEqual(next.get('codex/BUILD.json').toString(), files.get('codex/BUILD.json').toString());
 });

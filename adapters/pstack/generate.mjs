@@ -49,36 +49,29 @@ export function render(sourceRoot = root, adapterRoot = here) {
   const baseVersion = manifest.version.split('+')[0];
   const packageVersion = `${baseVersion}${baseVersion.includes('-') ? '.' : '-'}pstack.h${contentDigest.slice(0, 20)}`;
   const out = new Map();
-  for (const harness of ['codex', 'claude-code']) {
+  for (const harness of ['codex']) {
     const files = new Map([...sourceFiles, ...kitFiles]);
     for (const adapter of ['codex.md', 'shared-memory.md']) {
       files.set(`docs/harness/${adapter}`, readFileSync(join(adapterRoot, adapter)));
     }
     files.set('LICENSE.cursor-team-kit', license);
-    const name = harness === 'codex' ? 'Codex' : 'Claude Code';
-    const adapter = harness === 'codex' ? 'codex.md' : 'claude-code.md';
+    const name = 'Codex';
+    const adapter = 'codex.md';
     for (const [path, bytes] of files) {
       if (!/^skills\/[^/]+\/SKILL\.md$/.test(path) && !/^agents\/[^/]+\.md$/.test(path)) continue;
       const prefix = path.startsWith('agents/') ? '../' : '../../';
       const instruction = `In ${name}, first read [the harness adapter](${prefix}docs/harness/${adapter}) and [shared project records](${prefix}docs/harness/shared-memory.md). Follow these mappings before the platform-specific names below. Resolve resources inside this installed package. Shared project overrides take precedence.`;
       files.set(path, Buffer.from(preface(bytes.toString('utf8'), instruction, path)));
     }
-    if (harness === 'codex') {
-      files.set('.codex-plugin/plugin.json', Buffer.from(JSON.stringify({
-        name: 'pstack', version: packageVersion,
-        description: `${manifest.description} Codex adapter with shared project records.`,
-        skills: './skills/',
-      }, null, 2) + '\n'));
-      // Codex agent types are provided by the host, not registered by these Markdown files.
-      files.delete('.claude-plugin/plugin.json');
-      files.delete('.cursor-plugin/plugin.json');
-      files.delete('plugin.json');
-    } else {
-      const adaptedManifest = Buffer.from(JSON.stringify({ ...manifest, version: packageVersion }, null, 2) + '\n');
-      files.set('.claude-plugin/plugin.json', adaptedManifest);
-      files.set('plugin.json', adaptedManifest);
-      files.delete('.cursor-plugin/plugin.json');
-    }
+    files.set('.codex-plugin/plugin.json', Buffer.from(JSON.stringify({
+      name: 'pstack', version: packageVersion,
+      description: `${manifest.description} Codex adapter using official Claude project records.`,
+      skills: './skills/',
+    }, null, 2) + '\n'));
+    // Codex agent types are host-provided; no Claude variant is generated.
+    files.delete('.claude-plugin/plugin.json');
+    files.delete('.cursor-plugin/plugin.json');
+    files.delete('plugin.json');
     files.set('BUILD.json', Buffer.from(JSON.stringify({
       source: 'pstack/', upstreamVersion: manifest.version, version: packageVersion, contentDigest, harness,
       sourceDigest: digest.copy().digest('hex'), adapterDigest: adapterDigest.copy().digest('hex'), kitSkills,
@@ -88,10 +81,6 @@ export function render(sourceRoot = root, adapterRoot = here) {
   out.set('.agents/plugins/marketplace.json', Buffer.from(JSON.stringify({
     name: 'pstack-local', plugins: [{ name: 'pstack', source: { source: 'local', path: './codex' },
       policy: { installation: 'AVAILABLE', authentication: 'ON_INSTALL' }, category: 'Productivity' }],
-  }, null, 2) + '\n'));
-  out.set('.claude-plugin/marketplace.json', Buffer.from(JSON.stringify({
-    name: 'pstack-local', owner: { name: 'Local pstack adapter' },
-    plugins: [{ name: 'pstack', source: './claude-code' }],
   }, null, 2) + '\n'));
   return out;
 }
@@ -120,7 +109,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (args.includes('--check')) {
     const drift = check(files);
     if (drift.length) throw new Error(`Generated packages are stale. Run node adapters/pstack/generate.mjs\n${drift.slice(0, 10).join('\n')}`);
-    console.log('pstack Codex and Claude packages are up to date.');
+    console.log('pstack Codex package is up to date.');
   } else {
     generate(files);
     console.log(`Generated ${files.size} files in ${output}`);

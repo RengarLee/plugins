@@ -1,131 +1,92 @@
-# pstack：Codex + Claude Code 本地适配
+# pstack：Codex 适配，Claude Code 保留官方原版
 
-这一层借鉴上游 `pstack/docs/harness/claude-code.md` 和 `scripts/generate-pstack-harness-trees.mjs`：保留同一份技能正文，在入口加入平台适配说明，再生成可安装副本。**没有修改 `pstack/`、上游 Claude 生成器或其已提交产物。**
+这份改动只为 Codex 生成安装包。Claude Code 继续安装 `cursor/plugins` 官方 pstack，不需要安装我们的 Claude 变体。
 
-## 构建和检查
+沿用官方 Claude 适配的思路：同一份上游技能正文，加平台工具/路径映射，再生成 Codex 可用副本。`pstack/`、原有 Claude 生成器和官方 Claude 产物均不修改。
 
-需要 Node.js 22 或更高版本，无 npm 依赖。在此 fork 的仓库根目录运行：
+## 安装与更新
 
-```sh
-node adapters/pstack/generate.mjs
-node adapters/pstack/generate.mjs --check
-node --test adapters/pstack/test/*.test.mjs
-```
-
-产物在本目录 `build/`，不提交 Git：
-
-- `codex/`：Codex 插件，`.codex-plugin/plugin.json` 声明 `./skills/`。
-- `claude-code/`：Claude 插件，继续使用上游 Claude 工具映射，额外加载共享记录约定。
-- `.agents/plugins/marketplace.json`：Codex 本地市场。
-- `.claude-plugin/marketplace.json`：Claude 本地市场。
-
-适配包使用独立版本，例如 `0.15.36-pstack.h<内容摘要>`。源技能、kit、适配器或生成逻辑变化都会改变版本身份，即使上游版本号未变；`BUILD.json` 另外保留上游版本与完整摘要。这个哈希是内容身份，不是递增发布序号，不能据此承诺客户端自动升级排序。显式刷新后仍须核对安装副本的版本；若客户端拒绝较低排序的本地版本，应通过客户端重新安装，而不是手改缓存。
-
-不会安装软件、登录、修改全局配置、写入项目记忆或推送远程。生成器只重建自己的 `build/`，不要在里面保存定制。上游生成器会清空 `harness/pstack/`，所以不把 Codex 产物放在那里。
-
-## 安装
-
-请先阅读生成的适配说明，再安装。不要同时启用上游 pstack 和这个同名包，以免重复技能。
-
-Codex 支持本地市场的客户端：
+### Claude Code：官方原版，用户级
 
 ```sh
-codex plugin marketplace add /absolute/path/to/plugins/adapters/pstack/build
+claude plugin marketplace add cursor/plugins --scope user
+claude plugin install pstack@cursor-plugins --scope user
 ```
 
-然后在 ChatGPT 桌面应用插件页面安装/启用 `pstack-local` 市场的 `pstack`。这一步需要用户在自己的客户端完成，本次测试没有执行真实客户端安装。路径可以使用 Windows 的实际绝对路径并加引号。
-
-Claude Code 在插件命令中添加同一构建目录：
-
-```text
-/plugin marketplace add /absolute/path/to/plugins/adapters/pstack/build
-/plugin install pstack@pstack-local
-```
-
-也可用 Claude Code 的本地插件目录方式测试 `build/claude-code`。如果仍安装上游 `pstack@cursor-plugins`，它**没有**本适配器的共享记忆约定。
-
-安装机制依据 [OpenAI 本地插件与市场文档](https://developers.openai.com/plugins/build/plugins)。本地市场会复制到客户端缓存，并不是直接运行工作副本。修改源文件后要刷新插件/重启客户端，不可仅以生成成功认定安装已更新。
-
-## 后续更新
-
-推荐保留上游 `main`，只在这个适配目录维护自己的改动。普通上游变更无需重写 Codex 技能：
-
-1. GitHub 的 **Sync fork** 把 `cursor/plugins:main` 合入你的 fork。
-2. 本地运行以下命令。也可把它保存成自己的更新按钮所调用的操作：
+以后更新：
 
 ```sh
-git pull --ff-only
-node --test adapters/pstack/test/*.test.mjs
-node adapters/pstack/generate.mjs
-node adapters/pstack/generate.mjs --check
+claude plugin marketplace update cursor-plugins
+claude plugin update pstack@cursor-plugins --scope user
 ```
 
-Windows 可以双击 `adapters/pstack/update.cmd` 执行第 2 步；它不处理 GitHub 的 Sync fork，也不自动改客户端配置。
+### Codex：我们的适配版，用户级
 
-3. 刷新已安装插件。Codex 可刷新本地市场后重启客户端；Claude 执行 `claude plugin update pstack@pstack-local`，然后开启新会话。确认新包的 `BUILD.json` 摘要与本次构建一致。
-
-**Sync fork 不会自动拉取电脑上的代码，也不会替客户端刷新插件缓存。** 如果上游改变目录、工具协议或引入新的平台专属能力，仍需检查适配。`git pull --ff-only` 遇到分叉会停止，不强推、不自动丢弃改动。生成器的输入摘要可追踪版本；并不能自动证明一个新工具已正确适配。
-
-## 共享什么
-
-两个适配包都读取同一个目标项目，而不是插件仓库：
-
-| 内容 | 共同位置 / 做法 |
-| --- | --- |
-| `/correct` 的规则与约束表 | 优先项目现有 `CLAUDE.md`；没有时复用现有 `AGENTS.md`，两者都没有时新建 `CLAUDE.md`。Codex 显式读取，不假设原生自动发现 |
-| `/show-me-your-work` 的决策记录 | 原有 `decisions.tsv` 或 `.audit/<task>.tsv` |
-| 已批准的 `/reflect` 改进、项目验证技能 | 项目 `.claude/skills/<name>/`，两边都先检查并直接读取，保留 Claude 既有位置 |
-| 模型选项 | 不共享；Codex 与 Claude 可用模型不同 |
-| 原生聊天记录、平台自动记忆 | 不共享、不搬运、不扫描别的项目 |
-
-项目覆盖技能有明确优先级，**不会被上游更新覆盖，也不会自动获得上游对该技能的后续修复**。这是保留个性化的代价，需要比较后再合并。不要同时写一个 TSV 日志；每工作流分日志或只保留一个写者。不同 worktree/电脑上的未提交文件不会自动同步。
-
-这不是新建一个庞大的记忆系统。主要是让上游本来会写出的文件落在共同位置，并确保两边都读取它们。用户已有 `CLAUDE.md`、`AGENTS.md` 不会被脚本改写。
-
-## Cursor 专属部分
-
-`cursor-team-kit` 不是私有 SDK。本构建从同一仓库复制 `deslop`、`control-cli`、`control-ui` 三个技能及其资源，并保留许可证。不会自动安装它们提到的软件或提供浏览器、GUI、终端控制权限。
-
-Cursor 的 Task 字段、模型 slug、自定义 agent、自动化、Bugbot 启动、`/loop`、云端环境并不能照搬到 Codex。适配器使用当前会话实际提供的能力，没有则明确降级/标记未验证。例如，同模型的两个 reviewer 不等于跨模型验证。平台原生 transcript 不可读时，不编造日志审计结果。
-
-上游自动化资料保留在包内用于查阅，但未注册成可运行的 Codex 自动化。脚本保留原字节和可执行位；需要 Bash 等依赖的脚本仍要求目标机器具备它们。此补丁的自动测试验证生成、资源与更新流程，不等于各个技能在两个真实客户端上都完成了端到端运行。
-
-共享范围是 Claude 现有的项目规则、技能改进及任务记录，不是整个 `~/.claude`。不会扫描凭据、其他项目或原生聊天/自动记忆。用户级技能只在明确选择该范围时读取指定目录；已有其他位置的记录不会自动搬迁。该约定在运行本适配包技能时生效，并非让所有普通会话自动共享记忆。
-
-## 通过 GitHub 地址安装与更新（发布分支）
-
-PR 合并后，`Publish pstack packages` 在 `main` 的相关文件变化时运行检查，生成两端安装包，再普通推送到独立 `pstack-release` 分支。也支持从 `main` 手动运行；本次未合并、未触发发布，因此下面的地址要等首次发布成功才可使用。
-
-首次配置：
+PR 合并到 `main` 后，要等 `Publish pstack packages` 工作流成功创建 `pstack-release` 分支，再执行：
 
 ```sh
 codex plugin marketplace add RengarLee/plugins --ref pstack-release
 ```
 
-随后在支持本地市场的 Codex/ChatGPT 桌面插件界面选择 `pstack-shared`，安装 `pstack`。Claude Code 会话中使用：
-
-```text
-/plugin marketplace add https://github.com/RengarLee/plugins.git#pstack-release
-/plugin install pstack@pstack-shared
-```
-
-以后在终端更新：
+然后在支持插件的桌面客户端选择 `pstack-shared` 市场，安装 `pstack`。该命令使用用户级 Codex 配置，没有 `--scope` 参数。以后更新：
 
 ```sh
 codex plugin marketplace upgrade pstack-shared
-claude plugin marketplace update pstack-shared
-claude plugin update pstack@pstack-shared
 ```
 
-这两个客户端各自维护安装状态，不会因为更新其中一个而更新另一个。更新后刷新/重启 Codex，Claude 开新会话，并核对安装包 `BUILD.json` 的 `sourceCommit`。不要同时启用上游版、本地 `pstack-local` 版和发布版这几份同名技能；迁移时由用户在客户端选择停用旧版。
+刷新/重启客户端，核对安装包 `BUILD.json`。Claude 和 Codex 分别维护安装状态，不会因为更新其中一个而更新另一个。不要同时启用多份同名 pstack；迁移时通过客户端停用旧版，不直接改缓存。
 
-现在分成两层，不需要你在电脑上构建：
+**用户级安装不代表用户级共享所有记忆。** 默认共享记录仍按当前项目隔离，不会跨项目混读。
 
-1. **源代码更新**：在 GitHub 点击 Sync fork，或把自己的变更合并到 `main`。工作流检查通过才发布；失败则保留上一份可用发布，不会冒充已更新。
-2. **使用端更新**：两个客户端分别执行上面的原生更新命令。它们只获取已发布版本，不会替你同步 `cursor/plugins` 上游。
+## 更新上游与发布
 
-发布工作流只允许在 `RengarLee/plugins` 的 `main` 上运行，没有定时任务、没有 PR 代码发布触发，也不自动合并上游。仅发布 job 请求 `contents: write`，不修改仓库 Actions 全局权限，不需要保存 PAT。已存在的发布分支必须带匹配的管理标记，否则拒绝覆盖；推送不使用 force，遇到并发分叉或分支保护就停止。发布包用 Actions 运行号与重试号生成版本，并保存源提交和内容摘要。不得随意重命名/重建该发布工作流以重置运行编号。
+1. 在 GitHub 点击 Sync fork，把 `cursor/plugins` 更新到这个 fork 的 `main`。
+2. 相关文件变化触发工作流，测试通过后生成 Codex 包并普通推送到独立 `pstack-release`。失败保留上一份发布。
+3. Codex 执行原生 marketplace upgrade；不再需要使用者在电脑上运行 Node 构建。
 
-首次发布可能受 Actions 策略、分支保护、网络或上游兼容性阻挡；检查工作流结果后再安装。PR 测试只能验证生成结构和发布保护条件，本次尚未验证真实 GitHub 发布、客户端安装及缓存更新全过程。
+发布只允许在 `RengarLee/plugins` 的 `main` 运行。没有定时同步、没有 PR 发布触发、不自动合并上游。仅发布 job 请求 `contents: write`，不修改全局 Actions 权限，也不需要 PAT。已有发布分支必须有匹配的管理标记；普通推送，不 force，遇到分叉或分支保护就停止。包版本包含运行编号与重试编号，`BUILD.json` 记录源提交和内容摘要。不要随意重建发布工作流以重置编号。
 
-官方命令依据：[Codex 插件市场](https://developers.openai.com/plugins/build/plugins)、[Claude 市场托管与更新](https://code.claude.com/docs/en/plugins/host-marketplace)。
+PR 本身不会创建发布分支；必须先合并并等首次发布成功。真实发布、客户端安装和更新仍需验证。
+
+## 共享官方实际写入的位置
+
+pstack 没有单一记忆数据库。Codex 主动使用 Claude 官方约定的这些位置，不要求 Claude 安装我们的插件：
+
+| 内容 | 官方行为与 Codex 适配 |
+| --- | --- |
+| `/correct` 规则/强制检查表 | 写 agent instruction file；Claude adapter 映射到项目 `CLAUDE.md`，没有时用 `AGENTS.md`。Codex 复用现有文件，不另建副本。 |
+| `/reflect` 经批准的技能改进 | 官方复制后编辑本地技能，Claude 映射为项目 `.claude/skills/<skill>/`；用户明确选用户范围时才用 `~/.claude/skills/<skill>/`。Codex 读写同一份。 |
+| 项目验证技能 | 官方 `.cursor/skills/verify-<app>/` 经 Claude 映射到 `.claude/skills/verify-<app>/`；Codex 保持这一位置。 |
+| `/show-me-your-work` 决策记录 | 保留项目 `decisions.tsv` 或 `.audit/<task-slug>.tsv`。 |
+| 模型偏好 | 各自独立，Claude 为 `~/.claude/rules/pstack-models.md`，Codex 为项目 `.pstack/models/codex.md`。 |
+| 原生聊天记录与平台自动记忆 | 不合并、不扫描、不自动迁移。 |
+
+上游依据：`pstack/docs/harness/claude-code.md` 的 Paths 表和技能调用映射；`pstack/skills/reflect/SKILL.md` 的复制/批准步骤；`pstack/skills/correct/SKILL.md` 的规则表；`pstack/skills/show-me-your-work/SKILL.md` 的日志位置。
+
+**共享文件不等于保证官方 Claude 每次调用都会自动用它。** 官方 Claude adapter 内部调用技能时显式读取插件包内的技能路径；我们不能从 Codex 改变它的优先级。需要使用本地改进时，明确调用本地技能或请 Claude 读取那个具体文件。Codex 则按适配说明先检查指定项目覆盖技能。
+
+Codex 写共享技能时保留平台中立的正文，不把 Codex 专属工具映射和模型设置写进去。插件更新不覆盖本地改进，但本地副本可能落后于上游，需比较后合并。两端更新节奏不同也可能存在版本差异，不能承诺永久零维护。
+
+不要扫描整个 `~/.claude`，不读取凭据或无关项目，不把插件缓存当记忆文件夹。同一日志只保留一个写者；不同电脑/worktree 的未提交文件不会自动同步。没有可访问的同一份文件时，共享未生效。
+
+## 本地开发
+
+需要 Node.js 22+，无 npm 依赖：
+
+```sh
+node --test adapters/pstack/test/*.test.mjs
+node adapters/pstack/generate.mjs
+node adapters/pstack/generate.mjs --check
+```
+
+本地生成 `build/codex/` 与 `build/.agents/plugins/marketplace.json`（市场名 `pstack-local`）；不生成 Claude 包。`build/` 和 `build-release/` 都是可重建目录，不提交，不保存个人经验。上游生成器会清空 `harness/pstack/`，因此使用独立目录避免冲突。
+
+`update.cmd` 是开发者本地拉取、测试和生成助手，不替代 GitHub Sync fork 或客户端刷新。日常使用者推荐上面的发布分支方式。
+
+## 功能边界
+
+`cursor-team-kit` 是同仓库技能集合，不是私有 SDK。Codex 包带入 `deslop`、`control-cli`、`control-ui` 及资源和许可证；依赖的软件、浏览器/终端权限仍须实际可用。Cursor 专属 Task 参数、模型名、Automations、Bugbot 启动、云代理和 `/loop` 不能假装兼容；适配器用实际工具或明确降级。
+
+测试验证生成结构、链接、更新传递和发布保护条件，不等于所有技能在真实客户端端到端通过。
+
+官方命令依据：[Codex 插件市场](https://developers.openai.com/plugins/build/plugins)、[Claude 市场托管](https://code.claude.com/docs/en/plugins/host-marketplace)。

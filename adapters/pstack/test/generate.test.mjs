@@ -8,7 +8,7 @@ const files = render();
 
 test('every skill and agent preserves its frontmatter and loads both adapters', () => {
   const entries = [...files].filter(([path]) => /^(codex|claude-code)\/(skills\/[^/]+\/SKILL|agents\/[^/]+)\.md$/.test(path));
-  assert.ok(entries.length > 100);
+  assert.ok(entries.length > 50);
   for (const [path, bytes] of entries) {
     const text = bytes.toString();
     assert.match(text, /^---\r?\nname:/, path);
@@ -23,7 +23,7 @@ test('every skill and agent preserves its frontmatter and loads both adapters', 
 });
 
 test('packages carry native manifests, skill resources, adapters and optional kit', () => {
-  for (const harness of ['codex', 'claude-code']) {
+  for (const harness of ['codex']) {
     const manifest = JSON.parse(files.get(`${harness}/.${harness === 'codex' ? 'codex' : 'claude'}-plugin/plugin.json`));
     assert.equal(manifest.name, 'pstack');
     assert.ok(files.has(`${harness}/skills/show-me-your-work/scripts/log.sh`));
@@ -33,6 +33,8 @@ test('packages carry native manifests, skill resources, adapters and optional ki
   const catalog = JSON.parse(files.get('.agents/plugins/marketplace.json'));
   assert.equal(catalog.plugins[0].source.path, './codex');
   assert.ok(files.has('codex/.codex-plugin/plugin.json'));
+  assert.equal(files.has('.claude-plugin/marketplace.json'), false);
+  assert.equal([...files.keys()].some(path => path.startsWith('claude-code/')), false);
   assert.equal(files.has('codex/.cursor-plugin/plugin.json'), false);
 });
 
@@ -70,7 +72,7 @@ test('new upstream skills and edits flow through without editing the adapter', (
     mkdirSync(join(dir, 'pstack/skills/new-upstream'));
     writeFileSync(join(dir, 'pstack/skills/new-upstream/SKILL.md'), '---\nname: new-upstream\ndescription: Test new upstream entry\n---\nNew source without a heading.\n');
     const updated = render(dir);
-    for (const harness of ['codex', 'claude-code']) {
+    for (const harness of ['codex']) {
       assert.match(updated.get(`${harness}/skills/new-upstream/SKILL.md`).toString(), /New source without a heading/);
       assert.notEqual(updated.get(`${harness}/BUILD.json`).toString(), files.get(`${harness}/BUILD.json`).toString());
     }
@@ -84,8 +86,8 @@ test('kit-only and adapter-only changes each create a distinct consistent plugin
   const verify = result => {
     const expected = version(result, 'codex');
     assert.match(expected, /^\d+\.\d+\.\d+-pstack\.h[0-9a-f]{20}$/);
-    assert.equal(version(result, 'claude-code'), expected);
-    for (const path of ['codex/.codex-plugin/plugin.json', 'claude-code/.claude-plugin/plugin.json', 'claude-code/plugin.json']) {
+
+    for (const path of ['codex/.codex-plugin/plugin.json']) {
       assert.equal(JSON.parse(result.get(path)).version, expected, path);
     }
   };
@@ -110,12 +112,12 @@ test('kit-only and adapter-only changes each create a distinct consistent plugin
   } finally { rmSync(dir, { recursive: true }); }
 });
 
-test('both packages share Claude project records without broad home-directory access', () => {
+test('Codex follows official Claude project records without broad home-directory access', () => {
   const mapping = readFileSync(join(root, 'adapters/pstack/shared-memory.md'), 'utf8');
-  for (const harness of ['codex', 'claude-code']) {
+  for (const harness of ['codex']) {
     const text = files.get(`${harness}/docs/harness/shared-memory.md`).toString();
     assert.equal(text, mapping);
-    for (const required of ['existing `CLAUDE.md`', '`AGENTS.md` exists', '.claude/skills/<skill>/', 'decisions.tsv', '.audit/<task-slug>.tsv', 'Keep `/reflect`\'s approval step', 'Do not recursively scan `~/.claude`', 'credentials', 'one writer per log', 'Native auto-memory', 'not make every ordinary']) assert.ok(text.includes(required), required);
+    for (const required of ['existing `CLAUDE.md`', '`AGENTS.md` exists', '.claude/skills/<skill>/', 'decisions.tsv', '.audit/<task-slug>.tsv', 'Keep `/reflect`\'s approval step', 'Do not recursively scan `~/.claude`', 'credentials', 'one writer per log', 'Native auto-memory', 'not make every ordinary', 'official upstream plugin unchanged', 'do not persist the generated Codex-only harness preface', 'cannot change that precedence from Codex']) assert.ok(text.includes(required), required);
     assert.match(text, /Do not create another mutable copy in `\.agents\/skills\//);
     assert.match(text, /only when the user has explicitly selected that scope/);
   }

@@ -60,6 +60,6 @@ jobs:
             git -C "$publish" rm -r -- .
           fi
           cp -a adapters/pstack/build-release/. "$publish/"
-          git -C "$publish" add -- codex claude-code .agents .claude-plugin PSTACK-RELEASE.json README.md
+          git -C "$publish" add -- codex .agents PSTACK-RELEASE.json README.md
           git -C "$publish" -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Build pstack from $GITHUB_SHA"
           git -C "$publish" push origin HEAD:refs/heads/pstack-release
