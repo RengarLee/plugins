@@ -1,0 +1,27 @@
+name: Validate pstack adapters
+on:
+  pull_request:
+    paths:
+      - 'pstack/**'
+      - 'cursor-team-kit/**'
+      - 'adapters/pstack/**'
+      - '.github/workflows/pstack-adapters.yml'
+  push:
+    paths:
+      - 'pstack/**'
+      - 'cursor-team-kit/**'
+      - 'adapters/pstack/**'
+      - '.github/workflows/pstack-adapters.yml'
+  workflow_dispatch:
+jobs:
+  adapter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test adapters/pstack/test/*.test.mjs
+      - run: node adapters/pstack/generate.mjs
+      - run: node adapters/pstack/generate.mjs --check
+      - run: node scripts/generate-pstack-harness-trees.mjs --check

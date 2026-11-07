@@ -1,0 +1,65 @@
+name: Publish pstack packages
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pstack/**'
+      - 'cursor-team-kit/**'
+      - 'adapters/pstack/**'
+      - '.github/workflows/pstack-release.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pstack-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'RengarLee/plugins' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test adapters/pstack/test/*.test.mjs
+      - run: node scripts/generate-pstack-harness-trees.mjs --check
+      - name: Build packages from the tested source
+        env:
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          RELEASE_ID: ${{ github.run_number }}.${{ github.run_attempt }}
+        run: node adapters/pstack/release.mjs "$REPOSITORY" "$SOURCE_COMMIT" "$RELEASE_ID"
+      - name: Publish without force or overwriting an unrelated branch
+        env:
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          publish="$RUNNER_TEMP/pstack-publish"
+          # Capture transport errors separately from a genuinely missing branch.
+          refs=$(git ls-remote --heads origin refs/heads/pstack-release)
+          if [ -n "$refs" ]; then
+            git fetch origin refs/heads/pstack-release
+            git worktree add --detach "$publish" FETCH_HEAD
+            node - "$publish/PSTACK-RELEASE.json" "$REPOSITORY" <<'NODE'
+          const fs = require('node:fs');
+          const marker = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (marker.managedBy !== 'pstack-adapter-release-v1' || marker.repository !== process.argv[3]) {
+            throw new Error('Refusing to replace an unmanaged release branch');
+          }
+          NODE
+            git -C "$publish" rm -r --ignore-unmatch -- codex claude-code .agents .claude-plugin PSTACK-RELEASE.json README.md
+          else
+            git worktree add --detach "$publish" HEAD
+            # First publication creates a separate generated tree, not a main edit.
+            git -C "$publish" rm -r -- .
+          fi
+          cp -a adapters/pstack/build-release/. "$publish/"
+          git -C "$publish" add -- codex .agents PSTACK-RELEASE.json README.md
+          git -C "$publish" -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Build pstack from $GITHUB_SHA"
+          git -C "$publish" push origin HEAD:refs/heads/pstack-release
