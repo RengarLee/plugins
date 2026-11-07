@@ -91,3 +91,41 @@ Cursor 的 Task 字段、模型 slug、自定义 agent、自动化、Bugbot 启�
 上游自动化资料保留在包内用于查阅，但未注册成可运行的 Codex 自动化。脚本保留原字节和可执行位；需要 Bash 等依赖的脚本仍要求目标机器具备它们。此补丁的自动测试验证生成、资源与更新流程，不等于各个技能在两个真实客户端上都完成了端到端运行。
 
 共享范围是 Claude 现有的项目规则、技能改进及任务记录，不是整个 `~/.claude`。不会扫描凭据、其他项目或原生聊天/自动记忆。用户级技能只在明确选择该范围时读取指定目录；已有其他位置的记录不会自动搬迁。该约定在运行本适配包技能时生效，并非让所有普通会话自动共享记忆。
+
+## 通过 GitHub 地址安装与更新（发布分支）
+
+PR 合并后，`Publish pstack packages` 在 `main` 的相关文件变化时运行检查，生成两端安装包，再普通推送到独立 `pstack-release` 分支。也支持从 `main` 手动运行；本次未合并、未触发发布，因此下面的地址要等首次发布成功才可使用。
+
+首次配置：
+
+```sh
+codex plugin marketplace add RengarLee/plugins --ref pstack-release
+```
+
+随后在支持本地市场的 Codex/ChatGPT 桌面插件界面选择 `pstack-shared`，安装 `pstack`。Claude Code 会话中使用：
+
+```text
+/plugin marketplace add https://github.com/RengarLee/plugins.git#pstack-release
+/plugin install pstack@pstack-shared
+```
+
+以后在终端更新：
+
+```sh
+codex plugin marketplace upgrade pstack-shared
+claude plugin marketplace update pstack-shared
+claude plugin update pstack@pstack-shared
+```
+
+这两个客户端各自维护安装状态，不会因为更新其中一个而更新另一个。更新后刷新/重启 Codex，Claude 开新会话，并核对安装包 `BUILD.json` 的 `sourceCommit`。不要同时启用上游版、本地 `pstack-local` 版和发布版这几份同名技能；迁移时由用户在客户端选择停用旧版。
+
+现在分成两层，不需要你在电脑上构建：
+
+1. **源代码更新**：在 GitHub 点击 Sync fork，或把自己的变更合并到 `main`。工作流检查通过才发布；失败则保留上一份可用发布，不会冒充已更新。
+2. **使用端更新**：两个客户端分别执行上面的原生更新命令。它们只获取已发布版本，不会替你同步 `cursor/plugins` 上游。
+
+发布工作流只允许在 `RengarLee/plugins` 的 `main` 上运行，没有定时任务、没有 PR 代码发布触发，也不自动合并上游。仅发布 job 请求 `contents: write`，不修改仓库 Actions 全局权限，不需要保存 PAT。已存在的发布分支必须带匹配的管理标记，否则拒绝覆盖；推送不使用 force，遇到并发分叉或分支保护就停止。发布包用 Actions 运行号与重试号生成版本，并保存源提交和内容摘要。不得随意重命名/重建该发布工作流以重置运行编号。
+
+首次发布可能受 Actions 策略、分支保护、网络或上游兼容性阻挡；检查工作流结果后再安装。PR 测试只能验证生成结构和发布保护条件，本次尚未验证真实 GitHub 发布、客户端安装及缓存更新全过程。
+
+官方命令依据：[Codex 插件市场](https://developers.openai.com/plugins/build/plugins)、[Claude 市场托管与更新](https://code.claude.com/docs/en/plugins/host-marketplace)。
