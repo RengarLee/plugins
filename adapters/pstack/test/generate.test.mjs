@@ -109,3 +109,17 @@ test('kit-only and adapter-only changes each create a distinct consistent plugin
     assert.equal(JSON.parse(adapterChanged.get('codex/BUILD.json')).upstreamVersion, JSON.parse(baseline.get('codex/BUILD.json')).upstreamVersion);
   } finally { rmSync(dir, { recursive: true }); }
 });
+
+test('both packages share Claude project records without broad home-directory access', () => {
+  const mapping = readFileSync(join(root, 'adapters/pstack/shared-memory.md'), 'utf8');
+  for (const harness of ['codex', 'claude-code']) {
+    const text = files.get(`${harness}/docs/harness/shared-memory.md`).toString();
+    assert.equal(text, mapping);
+    for (const required of ['existing `CLAUDE.md`', '`AGENTS.md` exists', '.claude/skills/<skill>/', 'decisions.tsv', '.audit/<task-slug>.tsv', 'Keep `/reflect`\'s approval step', 'Do not recursively scan `~/.claude`', 'credentials', 'one writer per log', 'Native auto-memory', 'not make every ordinary']) assert.ok(text.includes(required), required);
+    assert.match(text, /Do not create another mutable copy in `\.agents\/skills\//);
+    assert.match(text, /only when the user has explicitly selected that scope/);
+  }
+  const codex = files.get('codex/docs/harness/codex.md').toString();
+  assert.match(codex, /maps to project `\.claude\/skills\//);
+  assert.doesNotMatch(codex, /maps to project `\.agents\/skills\//);
+});

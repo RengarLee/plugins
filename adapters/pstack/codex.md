@@ -20,8 +20,8 @@ Keep the fan-out size when several reviewers can run on the same model, but labe
 
 ## Paths and history
 
-- `.cursor/skills/` maps to project `.agents/skills/`. Follow `shared-memory.md` for edits/overrides and user-scoped choices.
-- `.cursor/rules/*.mdc` and always-applied project rules map to `AGENTS.md`; model preferences are the exception above. Never turn a rule into a permission grant.
+- `.cursor/skills/` maps to project `.claude/skills/`. Follow `shared-memory.md` for edits/overrides and user-scoped choices.
+- `.cursor/rules/*.mdc` and always-applied project rules use Claude's existing project rule file (`CLAUDE.md`, with the `AGENTS.md` fallback described in `shared-memory.md`); model preferences are the exception above. Never turn a rule into a permission grant.
 - `~/.cursor/plugins/` and `.cursor-plugin/plugin.json` refer to this installed package and its `.codex-plugin/plugin.json`, not another product's cache.
 - A repository GitHub URL for a file included in this bundle maps to the local file. Do not fetch the upstream version over a project override.
 - `agent-transcripts` and `~/.cursor/projects/` do not map to a guessed Codex session directory. Use only the active conversation and history explicitly exposed/authorized by the host for this workspace. If inaccessible, use a labeled digest and report transcript-based audits as unverified. Never scan all projects or bypass a denied path. Native Claude and Codex chat histories are not shared by this adapter.
