@@ -1,10 +1,10 @@
 {
   "source": "pstack/",
-  "upstreamVersion": "0.15.36",
-  "version": "0.15.36-pstack.1.1",
-  "contentDigest": "f3170709a4381bbce3627218af16608a45b8b3ed3f914aaf116b78e696883e43",
+  "upstreamVersion": "0.15.48",
+  "version": "0.15.48-pstack.2.1",
+  "contentDigest": "a421efdcc442e6b92ed93db0e5fb2974219687aa5ff549330a99592ecdc85c0a",
   "harness": "codex",
-  "sourceDigest": "a785aa037e063ace5f2608638f25c6d1a5af885461ee98438ded91b9858199d6",
+  "sourceDigest": "1c1832bb57dda3d58c8ca4d9d8013cac0d3e6332059a276561b8a40725dc6adc",
   "adapterDigest": "6650ec137ebf75ba9cf9efd812f73081bb85e80f471afdacbd93bebf48c59316",
   "kitSkills": [
     "deslop",
@@ -12,6 +12,6 @@
     "control-ui"
   ],
   "repository": "RengarLee/plugins",
-  "sourceCommit": "8efea3dcb6dd3690271c7058e0d76ecf4a330a42",
-  "releaseId": "1.1"
+  "sourceCommit": "7f61165ee0e235967c69699018865af6e8c4807b",
+  "releaseId": "2.1"
 }
