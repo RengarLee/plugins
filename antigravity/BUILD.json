@@ -1,0 +1,17 @@
+{
+  "source": "pstack/",
+  "upstreamVersion": "0.15.48",
+  "version": "0.15.48-pstack.3.1",
+  "contentDigest": "0ee28453a6be963f14e8d19bdc3b6281dd927b5dca9af1c4ab2a53f1319e012c",
+  "harness": "antigravity",
+  "sourceDigest": "1c1832bb57dda3d58c8ca4d9d8013cac0d3e6332059a276561b8a40725dc6adc",
+  "adapterDigest": "34c27014acba1a0f414bd5872d9c331f49735a11d91b06a6f5525a100d183e7e",
+  "kitSkills": [
+    "deslop",
+    "control-cli",
+    "control-ui"
+  ],
+  "repository": "RengarLee/plugins",
+  "sourceCommit": "a06057fc75700a12fdb12ac12992d226967fd278",
+  "releaseId": "3.1"
+}
