@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { render, generate } from './generate.mjs';
+import { render, generate, harnesses } from './generate.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const releaseOutput = join(here, 'build-release');
@@ -11,16 +11,13 @@ export function releaseTree({ repository, sourceCommit, releaseId }) {
   if (!/^[1-9][0-9]*\.[1-9][0-9]*$/.test(releaseId)) throw new Error('Expected run-number.run-attempt');
   const files = render();
   const json = value => Buffer.from(JSON.stringify(value, null, 2) + '\n');
-  for (const harness of ['codex']) {
+  for (const { id: harness, manifestPath } of harnesses) {
     const buildPath = `${harness}/BUILD.json`;
     const build = JSON.parse(files.get(buildPath));
     const version = `${build.upstreamVersion.split(/[+-]/)[0]}-pstack.${releaseId}`;
     files.set(buildPath, json({ ...build, version, repository, sourceCommit, releaseId }));
-    const manifests = harness === 'codex' ? ['.codex-plugin/plugin.json'] : ['.claude-plugin/plugin.json', 'plugin.json'];
-    for (const path of manifests) {
-      const key = `${harness}/${path}`;
-      files.set(key, json({ ...JSON.parse(files.get(key)), version }));
-    }
+    const key = `${harness}/${manifestPath}`;
+    files.set(key, json({ ...JSON.parse(files.get(key)), version }));
   }
   for (const path of ['.agents/plugins/marketplace.json']) {
     const catalog = JSON.parse(files.get(path));
@@ -29,7 +26,7 @@ export function releaseTree({ repository, sourceCommit, releaseId }) {
     files.set(path, json(catalog));
   }
   files.set('PSTACK-RELEASE.json', json({ managedBy: 'pstack-adapter-release-v1', repository, sourceCommit, releaseId }));
-  files.set('README.md', Buffer.from(`# Generated pstack for Codex\n\nSource: https://github.com/${repository}/commit/${sourceCommit}\n\nDo not edit this generated branch. Submit source changes to main.\n\nInstall: codex plugin marketplace add ${repository} --ref pstack-release\nThen install pstack from pstack-shared in the supported desktop client.\nUpdate: codex plugin marketplace upgrade pstack-shared\nRefresh/restart the client and verify BUILD.json.\n\nClaude Code stays on the official cursor/plugins marketplace (pstack@cursor-plugins), not this branch. Shared project files are not a shared plugin installation.\n\nPublication occurs only after source changes reach main and checks pass. Client updates do not sync the upstream fork.\n`));
+  files.set('README.md', Buffer.from(`# Generated pstack for Codex and Antigravity\n\nSource: https://github.com/${repository}/commit/${sourceCommit}\n\nDo not edit this generated branch. Submit source changes to main.\n\n## Codex\n\nInstall: codex plugin marketplace add ${repository} --ref pstack-release\nThen install pstack from pstack-shared in the supported desktop client.\nUpdate: codex plugin marketplace upgrade pstack-shared\nRefresh/restart the client and verify codex/BUILD.json.\n\n## Antigravity\n\nInstall from this release branch: agy plugin install https://github.com/${repository}/tree/pstack-release/antigravity\nOr install from a local checkout: agy plugin install ./antigravity\nUpdate: re-run agy plugin install with the same target, or refresh the local plugin directory and verify antigravity/BUILD.json.\n\nClaude Code stays on the official cursor/plugins marketplace (pstack@cursor-plugins), not this branch. Shared project files are not a shared plugin installation.\n\nPublication occurs only after source changes reach main and checks pass. Client updates do not sync the upstream fork.\n`));
   return files;
 }
 
