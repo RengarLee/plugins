@@ -8,6 +8,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const root = resolve(here, '../..');
 export const output = join(here, 'build');
 const kitSkills = ['deslop', 'control-cli', 'control-ui'];
+const antigravityModelTiers = new Set(['inherit', 'flash_lite', 'flash', 'pro']);
+export const harnesses = [
+  { id: 'codex', name: 'Codex', adapter: 'codex.md', manifestPath: '.codex-plugin/plugin.json' },
+  { id: 'antigravity', name: 'Antigravity', adapter: 'antigravity.md', manifestPath: 'plugin.json' },
+];
 
 function walk(dir) {
   return readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)).flatMap(e => {
@@ -31,6 +36,30 @@ function preface(text, instruction, path) {
   return frontmatter[0] + `\n${instruction}\n\n` + text.slice(frontmatter[0].length).trimStart();
 }
 
+function adaptAntigravityAgent(text, path) {
+  const match = text.match(/^(---\r?\n)([\s\S]*?)(\r?\n---(?:\r?\n|$))/);
+  if (!match) throw new Error(`Missing frontmatter in agent: ${path}`);
+  const eol = match[1].includes('\r\n') ? '\r\n' : '\n';
+  let hasSubagent = false;
+  let hasMainAgent = false;
+  const lines = [];
+  for (const line of match[2].split(/\r?\n/)) {
+    if (/^is_background\s*:/.test(line)) continue;
+    const modelMatch = line.match(/^model\s*:\s*(.+?)\s*$/);
+    if (modelMatch) {
+      const value = modelMatch[1].replace(/^(["'])(.*)\1$/, '$2');
+      lines.push(`model: ${antigravityModelTiers.has(value) ? value : 'inherit'}`);
+      continue;
+    }
+    if (/^subagent\s*:/.test(line)) hasSubagent = true;
+    if (/^mainAgent\s*:/.test(line)) hasMainAgent = true;
+    lines.push(line);
+  }
+  if (!hasSubagent) lines.push('subagent: true');
+  if (!hasMainAgent) lines.push('mainAgent: false');
+  return match[1] + lines.join(eol) + match[3] + text.slice(match[0].length);
+}
+
 export function render(sourceRoot = root, adapterRoot = here) {
   const source = join(sourceRoot, 'pstack');
   const manifest = JSON.parse(readFileSync(join(source, 'plugin.json'), 'utf8'));
@@ -42,39 +71,60 @@ export function render(sourceRoot = root, adapterRoot = here) {
   }
   const digest = createHash('sha256');
   for (const [path, bytes] of [...sourceFiles, ...kitFiles]) digest.update(path).update('\0').update(bytes).update(bytes.executable ? 'x' : '-');
-  const adapterDigest = createHash('sha256');
-  for (const name of ['generate.mjs', 'codex.md', 'shared-memory.md']) adapterDigest.update(name).update('\0').update(readFileSync(join(adapterRoot, name)));
+  const sourceDigest = digest.copy().digest('hex');
   const license = readFileSync(join(sourceRoot, 'cursor-team-kit/LICENSE'));
-  const contentDigest = createHash('sha256').update(digest.copy().digest()).update(adapterDigest.copy().digest()).update(license).digest('hex');
   const baseVersion = manifest.version.split('+')[0];
-  const packageVersion = `${baseVersion}${baseVersion.includes('-') ? '.' : '-'}pstack.h${contentDigest.slice(0, 20)}`;
   const out = new Map();
-  for (const harness of ['codex']) {
+  for (const { id: harness, name, adapter } of harnesses) {
+    const adapterHasher = createHash('sha256');
+    for (const file of ['generate.mjs', adapter, 'shared-memory.md']) {
+      adapterHasher.update(file).update('\0').update(readFileSync(join(adapterRoot, file)));
+    }
+    const adapterDigest = adapterHasher.copy().digest('hex');
+    const contentDigest = createHash('sha256').update(digest.copy().digest()).update(adapterHasher.copy().digest()).update(license).digest('hex');
+    const packageVersion = `${baseVersion}${baseVersion.includes('-') ? '.' : '-'}pstack.h${contentDigest.slice(0, 20)}`;
     const files = new Map([...sourceFiles, ...kitFiles]);
-    for (const adapter of ['codex.md', 'shared-memory.md']) {
-      files.set(`docs/harness/${adapter}`, readFileSync(join(adapterRoot, adapter)));
+    for (const doc of [adapter, 'shared-memory.md']) {
+      files.set(`docs/harness/${doc}`, readFileSync(join(adapterRoot, doc)));
     }
     files.set('LICENSE.cursor-team-kit', license);
-    const name = 'Codex';
-    const adapter = 'codex.md';
     for (const [path, bytes] of files) {
       if (!/^skills\/[^/]+\/SKILL\.md$/.test(path) && !/^agents\/[^/]+\.md$/.test(path)) continue;
       const prefix = path.startsWith('agents/') ? '../' : '../../';
       const instruction = `In ${name}, first read [the harness adapter](${prefix}docs/harness/${adapter}) and [shared project records](${prefix}docs/harness/shared-memory.md). Follow these mappings before the platform-specific names below. Resolve resources inside this installed package. Shared project overrides take precedence.`;
-      files.set(path, Buffer.from(preface(bytes.toString('utf8'), instruction, path)));
+      let text = bytes.toString('utf8');
+      if (harness === 'antigravity' && path.startsWith('agents/')) text = adaptAntigravityAgent(text, path);
+      files.set(path, Buffer.from(preface(text, instruction, path)));
     }
-    files.set('.codex-plugin/plugin.json', Buffer.from(JSON.stringify({
-      name: 'pstack', version: packageVersion,
-      description: `${manifest.description} Codex adapter using official Claude project records.`,
-      skills: './skills/',
-    }, null, 2) + '\n'));
-    // Codex agent types are host-provided; no Claude variant is generated.
+    if (harness === 'codex') {
+      files.set('.codex-plugin/plugin.json', Buffer.from(JSON.stringify({
+        name: 'pstack', version: packageVersion,
+        description: `${manifest.description} Codex adapter using official Claude project records.`,
+        skills: './skills/',
+      }, null, 2) + '\n'));
+      files.delete('plugin.json');
+    } else if (harness === 'antigravity') {
+      files.set('plugin.json', Buffer.from(JSON.stringify({
+        $schema: 'https://antigravity.google/schemas/v1/plugin.json',
+        name: 'pstack',
+        displayName: 'pstack',
+        version: packageVersion,
+        description: `${manifest.description} Antigravity adapter using official Claude project records.`,
+        logo: 'assets/logo.png',
+        author: manifest.author,
+        homepage: manifest.homepage,
+        repository: manifest.repository,
+        license: manifest.license,
+        keywords: manifest.keywords,
+        suggestedPrompts: ['/setup-pstack', '/poteto-help', '/poteto-mode'],
+      }, null, 2) + '\n'));
+    }
+    // No Claude or Cursor variant is generated.
     files.delete('.claude-plugin/plugin.json');
     files.delete('.cursor-plugin/plugin.json');
-    files.delete('plugin.json');
     files.set('BUILD.json', Buffer.from(JSON.stringify({
       source: 'pstack/', upstreamVersion: manifest.version, version: packageVersion, contentDigest, harness,
-      sourceDigest: digest.copy().digest('hex'), adapterDigest: adapterDigest.copy().digest('hex'), kitSkills,
+      sourceDigest, adapterDigest, kitSkills,
     }, null, 2) + '\n'));
     for (const [path, bytes] of files) out.set(`${harness}/${path}`, bytes);
   }
@@ -109,7 +159,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (args.includes('--check')) {
     const drift = check(files);
     if (drift.length) throw new Error(`Generated packages are stale. Run node adapters/pstack/generate.mjs\n${drift.slice(0, 10).join('\n')}`);
-    console.log('pstack Codex package is up to date.');
+    console.log('pstack adapter packages are up to date.');
   } else {
     generate(files);
     console.log(`Generated ${files.size} files in ${output}`);
